@@ -77,7 +77,7 @@ app.post('/v1', async (req, res) => {
       });
     }
 
-    const { model, messages, temperature = 0.7, max_tokens = 1024, stream = false } = req.body;
+    const { model, messages, temperature = 1.1, max_tokens = 20240, stream = false } = req.body;
 
     if (!model || !messages) {
       return res.status(400).json({
