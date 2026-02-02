@@ -28,13 +28,13 @@ const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
 
 // Simple model mapping - using models that definitely work
 const MODELS = {
-  'gpt-3.5-turbo': 'meta/llama-3.1-8b-instruct',
-  'gpt-4': 'meta/llama-3.1-70b-instruct', 
-  'gpt-4-turbo': 'meta/llama-3.3-70b-instruct',
-  'gpt-4o': 'meta/llama-3.1-405b-instruct',
-  'claude-3-opus': 'meta/llama-3.1-405b-instruct',
-  'claude-3-sonnet': 'meta/llama-3.1-70b-instruct',
-  'gemini-pro': 'meta/llama-3.3-70b-instruct'
+  'gpt-3.5-turbo': 'moonshotai/kimi-k2-instruct-0905',
+  'gpt-4': 'moonshotai/kimi-k2.5',
+  'gpt-4-turbo': 'deepseek-ai/deepseek-v3.1',
+  'gpt-4o': 'deepseek-ai/deepseek-v3_2',
+  'claude-3-opus': 'deepseek-ai/deepseek-v3_1-terminus',
+  'claude-3-sonnet': 'qwen/qwen3-235b-a22b',
+  'gemini-pro': 'z-ai/glm4_7' 
 };
 
 // Root endpoint - handles all methods
