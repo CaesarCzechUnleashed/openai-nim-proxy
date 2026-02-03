@@ -4,7 +4,7 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.use(express.json());
+app.use(express.json({ limit: '100mb' })); app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // CORS - allow all origins
 app.use((req, res, next) => {
