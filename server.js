@@ -38,12 +38,6 @@ const MODELS = {
   'deepseek-v3.2': 'deepseek-v3.2'
 };
 
-// Creative writing system prompt - FORCE ENGLISH
-const CREATIVE_WRITING_PROMPT = {
-  role: 'system',
-  content: 'You must respond ONLY in English. You are a creative writing assistant. Write engaging, vivid narratives. Do not show reasoning or thinking process - provide direct creative responses. Focus on immersive storytelling.'
-};
-
 // Root endpoint
 app.all('/', (req, res) => {
   res.json({
@@ -69,26 +63,6 @@ app.get('/v1/models', (req, res) => {
   res.json({ object: 'list', data: modelList });
 });
 
-// Function to remove reasoning content
-function cleanResponse(text) {
-  if (!text) return text;
-  
-  // Remove <think>...</think> blocks
-  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
-  
-  // Remove reasoning markers
-  cleaned = cleaned.replace(/\[Reasoning\][\s\S]*?\[\/Reasoning\]/gi, '');
-  cleaned = cleaned.replace(/\[思考\][\s\S]*?\[\/思考\]/gi, '');
-  
-  // Remove thinking tags
-  cleaned = cleaned.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
-  
-  // Trim whitespace
-  cleaned = cleaned.trim();
-  
-  return cleaned;
-}
-
 // Main chat function
 async function processChat(req, res) {
   try {
@@ -105,7 +79,7 @@ async function processChat(req, res) {
       });
     }
 
-    let { model, messages, temperature, max_tokens, stream = false } = req.body;
+    const { model, messages, temperature = 0.7, max_tokens, stream = false } = req.body;
 
     if (!model || !messages) {
       return res.status(400).json({
@@ -120,24 +94,14 @@ async function processChat(req, res) {
     const iflowModel = MODELS[model] || 'deepseek-v3.2';
     console.log(`Mapping ${model} -> ${iflowModel}`);
 
-    // Creative writing optimized defaults
-    const finalTemperature = temperature !== undefined ? temperature : 0.9;
+    // Set max_tokens
     const finalMaxTokens = max_tokens || 8192;
 
-    // Prepend creative writing system prompt
-    let finalMessages = [...messages];
-    if (finalMessages[0]?.role !== 'system') {
-      finalMessages.unshift(CREATIVE_WRITING_PROMPT);
-    } else {
-      // Add English requirement to existing system prompt
-      finalMessages[0].content = 'IMPORTANT: Respond ONLY in English. Do not show reasoning. ' + finalMessages[0].content;
-    }
-
-    // Call iFlow API - ONLY standard OpenAI parameters
+    // Call iFlow API
     const iflowRequest = {
       model: iflowModel,
-      messages: finalMessages,
-      temperature: finalTemperature,
+      messages: messages,
+      temperature: temperature,
       max_tokens: finalMaxTokens,
       stream: stream
     };
@@ -160,55 +124,11 @@ async function processChat(req, res) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
-      
-      // Filter streaming response
-      let buffer = '';
-      response.data.on('data', (chunk) => {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        
-        lines.forEach(line => {
-          if (line.startsWith('data: ')) {
-            try {
-              if (line.includes('[DONE]')) {
-                res.write(line + '\n');
-                return;
-              }
-              
-              const data = JSON.parse(line.slice(6));
-              if (data.choices?.[0]?.delta?.content) {
-                // Clean reasoning from streaming content
-                data.choices[0].delta.content = cleanResponse(data.choices[0].delta.content);
-              }
-              res.write(`data: ${JSON.stringify(data)}\n\n`);
-            } catch (e) {
-              res.write(line + '\n');
-            }
-          }
-        });
-      });
-      
-      response.data.on('end', () => res.end());
-      response.data.on('error', (err) => {
-        console.error('Stream error:', err);
-        res.end();
-      });
+      response.data.pipe(res);
     } else {
-      // Clean non-streaming response
+      // Already in OpenAI format, just forward it
       const iflowData = response.data;
-      
-      // Remove reasoning content from response
-      if (iflowData.choices) {
-        iflowData.choices = iflowData.choices.map(choice => {
-          if (choice.message?.content) {
-            choice.message.content = cleanResponse(choice.message.content);
-          }
-          return choice;
-        });
-      }
-      
-      console.log('Sending cleaned response');
+      console.log('Sending response');
       res.json(iflowData);
     }
 
@@ -253,5 +173,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Proxy running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
   console.log(`🔑 iFlow API Key: ${IFLOW_API_KEY ? 'SET ✓' : 'NOT SET ✗'}`);
-  console.log(`🎨 Mode: Creative Writing (English, reasoning filtered)`);
 });
