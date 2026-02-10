@@ -1,7 +1,7 @@
 {
-  "name": "nvidia-proxy",
+  "name": "iflow-proxy",
   "version": "1.0.0",
-  "description": "OpenAI compatible proxy for NVIDIA NIM",
+  "description": "OpenAI compatible proxy for iFlow API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -13,4 +13,3 @@
   "engines": {
     "node": "18.x"
   }
-}
