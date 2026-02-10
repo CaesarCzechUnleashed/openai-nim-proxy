@@ -41,7 +41,7 @@ const MODELS = {
 // Creative writing system prompt - FORCE ENGLISH
 const CREATIVE_WRITING_PROMPT = {
   role: 'system',
-  content: 'You are a creative writing assistant. IMPORTANT: You must respond ONLY in English. Write engaging, descriptive responses that bring scenes and characters to life. Do not show your reasoning or thinking process - go directly to the creative response. Focus on narrative and storytelling.'
+  content: 'You must respond ONLY in English. You are a creative writing assistant. Write engaging, vivid narratives. Do not show reasoning or thinking process - provide direct creative responses. Focus on immersive storytelling.'
 };
 
 // Root endpoint
@@ -79,6 +79,9 @@ function cleanResponse(text) {
   // Remove reasoning markers
   cleaned = cleaned.replace(/\[Reasoning\][\s\S]*?\[\/Reasoning\]/gi, '');
   cleaned = cleaned.replace(/\[思考\][\s\S]*?\[\/思考\]/gi, '');
+  
+  // Remove thinking tags
+  cleaned = cleaned.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
   
   // Trim whitespace
   cleaned = cleaned.trim();
@@ -127,31 +130,26 @@ async function processChat(req, res) {
       finalMessages.unshift(CREATIVE_WRITING_PROMPT);
     } else {
       // Add English requirement to existing system prompt
-      finalMessages[0].content = 'IMPORTANT: Respond ONLY in English. ' + finalMessages[0].content;
+      finalMessages[0].content = 'IMPORTANT: Respond ONLY in English. Do not show reasoning. ' + finalMessages[0].content;
     }
 
-    // Call iFlow API - try multiple parameters to disable thinking
+    // Call iFlow API - ONLY standard OpenAI parameters
     const iflowRequest = {
       model: iflowModel,
       messages: finalMessages,
       temperature: finalTemperature,
       max_tokens: finalMaxTokens,
-      stream: stream,
-      enable_thinking: false,
-      thinking: false,
-      reasoning_mode: false,
-      show_reasoning: false
+      stream: stream
     };
 
-    console.log('Calling iFlow API (English mode, thinking disabled)...');
+    console.log('Calling iFlow API...');
     const response = await axios.post(
       `${IFLOW_BASE_URL}/chat/completions`,
       iflowRequest,
       {
         headers: {
           'Authorization': `Bearer ${IFLOW_API_KEY}`,
-          'Content-Type': 'application/json',
-          'Accept-Language': 'en-US,en;q=0.9'
+          'Content-Type': 'application/json'
         },
         responseType: stream ? 'stream' : 'json',
         timeout: 180000
@@ -255,5 +253,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Proxy running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/health`);
   console.log(`🔑 iFlow API Key: ${IFLOW_API_KEY ? 'SET ✓' : 'NOT SET ✗'}`);
-  console.log(`🎨 Mode: Creative Writing (English only, thinking removed)`);
+  console.log(`🎨 Mode: Creative Writing (English, reasoning filtered)`);
 });
