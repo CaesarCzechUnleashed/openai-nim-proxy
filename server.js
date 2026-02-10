@@ -2,7 +2,7 @@ const express = require('express');
 const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
@@ -23,41 +23,42 @@ app.use((req, res, next) => {
   next();
 });
 
-const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
-const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
+const IFLOW_API_KEY = process.env.IFLOW_API_KEY || 'sk-8239bd9106538e1bc01fcd76f0593413';
+const IFLOW_BASE_URL = 'https://apis.iflow.cn/v1';
 
-// Your model mapping
+// Model mapping - all models use deepseek-v3.2
 const MODELS = {
-  'gpt-3.5-turbo': 'moonshotai/kimi-k2-instruct-0905',
-  'gpt-4': 'moonshotai/kimi-k2.5',
-  'gpt-4-turbo': 'deepseek-ai/deepseek-v3.1',
-  'gpt-4o': 'deepseek-ai/deepseek-v3_2',
-  'claude-3-opus': 'deepseek-ai/deepseek-v3_1-terminus',
-  'claude-3-sonnet': 'qwen/qwen3-235b-a22b',
-  'gemini-pro': 'z-ai/glm4_7'
+  'gpt-3.5-turbo': 'deepseek-v3.2',
+  'gpt-4': 'deepseek-v3.2',
+  'gpt-4-turbo': 'deepseek-v3.2',
+  'gpt-4o': 'deepseek-v3.2',
+  'claude-3-opus': 'deepseek-v3.2',
+  'claude-3-sonnet': 'deepseek-v3.2',
+  'gemini-pro': 'deepseek-v3.2',
+  'deepseek-v3.2': 'deepseek-v3.2'
 };
 
-// Root endpoint - handles all methods
+// Root endpoint
 app.all('/', (req, res) => {
   res.json({
     status: 'online',
-    message: 'NVIDIA NIM Proxy is running',
+    message: 'iFlow Proxy is running',
     version: '1.0.0'
   });
 });
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'nvidia-proxy' });
+  res.json({ status: 'ok', service: 'iflow-proxy' });
 });
 
-// List models (OpenAI compatible)
+// List models
 app.get('/v1/models', (req, res) => {
   const modelList = Object.keys(MODELS).map(id => ({
     id,
     object: 'model',
     created: Date.now(),
-    owned_by: 'nvidia'
+    owned_by: 'iflow'
   }));
   res.json({ object: 'list', data: modelList });
 });
@@ -67,16 +68,6 @@ async function processChat(req, res) {
   try {
     console.log('Received chat request');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
-
-    if (!NVIDIA_API_KEY) {
-      console.error('NVIDIA_API_KEY not set');
-      return res.status(500).json({
-        error: {
-          message: 'NVIDIA API key not configured',
-          type: 'server_error'
-        }
-      });
-    }
 
     const { model, messages, temperature = 0.7, max_tokens, stream = false } = req.body;
 
@@ -90,66 +81,45 @@ async function processChat(req, res) {
     }
 
     // Map model name
-    const nvidiaModel = MODELS[model] || MODELS['gpt-4'];
-    console.log(`Mapping ${model} -> ${nvidiaModel}`);
+    const iflowModel = MODELS[model] || 'deepseek-v3.2';
+    console.log(`Mapping ${model} -> ${iflowModel}`);
 
-    // Increase max_tokens to prevent cutoff
+    // Set max_tokens
     const finalMaxTokens = max_tokens || 8192;
 
-    // Call NVIDIA API
-    const nvidiaRequest = {
-      model: nvidiaModel,
+    // Call iFlow API
+    const iflowRequest = {
+      model: iflowModel,
       messages: messages,
       temperature: temperature,
       max_tokens: finalMaxTokens,
       stream: stream
     };
 
-    console.log('Calling NVIDIA API...');
+    console.log('Calling iFlow API...');
     const response = await axios.post(
-      `${NVIDIA_BASE_URL}/chat/completions`,
-      nvidiaRequest,
+      `${IFLOW_BASE_URL}/chat/completions`,
+      iflowRequest,
       {
         headers: {
-          'Authorization': `Bearer ${NVIDIA_API_KEY}`,
+          'Authorization': `Bearer ${IFLOW_API_KEY}`,
           'Content-Type': 'application/json'
         },
         responseType: stream ? 'stream' : 'json',
-        timeout: 360000 // 6 minutes timeout
+        timeout: 180000
       }
     );
 
     if (stream) {
-      // Stream response
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       response.data.pipe(res);
     } else {
-      // Regular response - convert to OpenAI format
-      const nvidiaData = response.data;
-      const openaiResponse = {
-        id: `chatcmpl-${Date.now()}`,
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: model,
-        choices: nvidiaData.choices || [{
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: nvidiaData.choices?.[0]?.message?.content || 'Error: No response'
-          },
-          finish_reason: 'stop'
-        }],
-        usage: nvidiaData.usage || {
-          prompt_tokens: 0,
-          completion_tokens: 0,
-          total_tokens: 0
-        }
-      };
-
+      // Already in OpenAI format, just forward it
+      const iflowData = response.data;
       console.log('Sending response');
-      res.json(openaiResponse);
+      res.json(iflowData);
     }
 
   } catch (error) {
@@ -160,7 +130,7 @@ async function processChat(req, res) {
     });
 
     const status = error.response?.status || 500;
-    const errorMessage = error.response?.data?.detail || error.message || 'Unknown error';
+    const errorMessage = error.response?.data?.error?.message || error.response?.data?.detail || error.message || 'Unknown error';
 
     res.status(status).json({
       error: {
@@ -189,8 +159,13 @@ app.all('*', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Proxy running on port ${PORT}`);
-  console.log(`📍 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔑 NVIDIA API Key: ${NVIDIA_API_KEY ? 'SET ✓' : 'NOT SET ✗'}`);
-});
+// For Vercel
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  app.listen(PORT, () => {
+    console.log(`🚀 Proxy running on port ${PORT}`);
+    console.log(`📍 Health check: http://localhost:${PORT}/health`);
+    console.log(`🔑 iFlow API Key: ${IFLOW_API_KEY ? 'SET ✓' : 'NOT SET ✗'}`);
+  });
+}
